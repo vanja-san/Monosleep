@@ -1,0 +1,19 @@
+# Version catalog: single source of truth for plugin and dependency versions.
+# https://docs.gradle.org/current/userguide/version_catalogs.html
+#
+# Only library/plugin versions belong here. Project metadata (mod version, group)
+# stays in gradle.properties.
+
+[versions]
+minecraft = "26.3"
+fabric-loader = "0.19.5"
+fabric-api = "0.161.0+26.3"
+fabric-loom = "1.18-SNAPSHOT"
+
+[libraries]
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
+
+[plugins]
+fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "fabric-loom" }

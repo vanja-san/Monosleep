@@ -1,0 +1,13 @@
+# Line endings are normalised in the repository and checked out as LF, so the tree is identical
+# no matter which platform commits to it. Do not rely on core.autocrlf for this.
+*               text=auto eol=lf
+
+# Linux/macOS start script: must stay LF or the shell chokes on the carriage return.
+/gradlew        text eol=lf
+
+# Windows start script: must stay CRLF.
+*.bat           text eol=crlf
+
+# Binaries must never be touched by line-ending normalisation or diffing.
+*.jar           binary
+*.png           binary

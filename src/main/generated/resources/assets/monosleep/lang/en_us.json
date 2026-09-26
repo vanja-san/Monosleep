@@ -1,0 +1,5 @@
+{
+  "advancement.monosleep.slept_alone.description": "One sleep against the whole lobby, and it was enough to bring the morning",
+  "advancement.monosleep.slept_alone.title": "Monosleep",
+  "message.monosleep.player_slept": "%s went to bed"
+}

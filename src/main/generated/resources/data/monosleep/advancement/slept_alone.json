@@ -1,0 +1,31 @@
+{
+  "criteria": {
+    "slept_alone": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "background": "minecraft:gui/advancements/backgrounds/stone",
+    "description": {
+      "fallback": "Один сон против целого онлайна — и этого хватило, чтобы наступило утро",
+      "translate": "advancement.monosleep.slept_alone.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "id": "minecraft:daylight_detector"
+    },
+    "title": {
+      "fallback": "Моносон",
+      "translate": "advancement.monosleep.slept_alone.title"
+    }
+  },
+  "requirements": [
+    [
+      "slept_alone"
+    ]
+  ],
+  "rewards": {
+    "experience": 50
+  },
+  "sends_telemetry_event": true
+}
