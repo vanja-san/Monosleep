@@ -45,6 +45,17 @@ dependencies {
 	minecraft(libs.minecraft)
 	implementation(libs.fabric.loader)
 	implementation(libs.fabric.api)
+
+	// Unit tests only. They cover the pure logic in monosleep.* that does not touch Minecraft.
+	testImplementation(platform(libs.junit.bom))
+	testImplementation(libs.junit.jupiter)
+	testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+	// Local, like the other task bodies: nothing here may capture the build script, or the
+	// configuration cache fails.
+	useJUnitPlatform()
 }
 
 java {

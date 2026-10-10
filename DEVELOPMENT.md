@@ -70,6 +70,8 @@ client without the mod still reads normal text instead of a raw translation key.
 
 - `./gradlew runServer` starts a development dedicated server.
 - `./gradlew runClient` starts a development client with the mod loaded.
+- Either one writes `run/config/monosleep.json` on the first start. Edit `notificationTarget` there
+  and restart to switch where the notice appears.
 - To try the advancement without a second player online, use
   `/advancement grant @s monosleep:slept_alone`.
 
@@ -97,25 +99,99 @@ Two mixins, both server-side.
 
 `ServerPlayerMixin` (`net.minecraft.server.level.ServerPlayer`)
 
-- `startSleepInBed(...)` sends a translatable action bar message to every player in the level on a
-  successful sleep. The action bar is drawn with the regular font at the player's own GUI scale,
-  unlike a screen title, which is rendered at 4x the font size — too large for a message that fires
-  every time somebody goes to bed.
+- `startSleepInBed(...)` sends the "somebody went to bed" notice to every player in the level on a
+  successful sleep. `MonosleepNotifications` picks the place the notice lands, see
+  [Configuration](#configuration). The default, the action bar, is drawn with the regular font at
+  the player's own GUI scale, unlike a screen title, which the client renders at 4x the font size —
+  too large for a message that fires every time somebody goes to bed.
+
+`MonosleepNotifications` (`monosleep`)
+
+- One `switch` over `NotificationTarget`, one send call per branch: `sendSystemMessage` for chat,
+  `sendOverlayMessage` for the action bar, and the three title and tab list packets
+  (`ClientboundSetTitlesAnimationPacket`, `ClientboundSetTitleTextPacket`,
+  `ClientboundSetSubtitleTextPacket`, `ClientboundTabListPacket`) for everything else. There is no
+  client code, so all of it goes through packets or the existing `ServerPlayer` helpers.
+- The sentence is sent into the subtitle slot rather than the title slot. The client draws a title
+  at `scale(4.0F)` on one centred line, with no wrapping and no shrink to fit, so on the narrowest
+  common screen it has room for roughly twenty characters and the sentence does not fit; the
+  subtitle is drawn at `scale(2.0F)`, twice the room, and lands whole. The title packet is still
+  sent with an empty component because `Hud.extractTitle` skips the whole block unless a title is
+  set; an empty title draws nothing, since HUD text has no background to fill in behind it.
+- A notice the client already shows cannot be taken back. `ClientboundDeleteChatPacket` is keyed on
+  `MessageSignature.Packed`, which only signed player messages carry, and
+  `ClientPacketListener.handleDeleteChat` disconnects the client with `INVALID_PACKET` when the
+  signature does not unpack, so sending one for a system message would kick players off. There is
+  no clear-chat packet in the protocol. The two cooldown settings are therefore the only way to
+  slow the notices down: they are checked before the target is looked at, so they read the same
+  for every target even though chat is the only one that piles up.
+
+`MonosleepNoticeCooldown` (`monosleep`)
+
+- The two windows, and nothing else. It takes the player, the current time and both windows, and
+  answers whether a notice is due; the caller records one only when it actually sends it, so a
+  dropped notice cannot push the window forward.
+- Its timestamps come from `Util.getMillis()`, which is `System.nanoTime()` scaled down. That is
+  monotonic rather than a wall clock and may start negative, so there is no "very old" value to
+  seed the fields with — arithmetic against one overflows and then reads as "just now", which
+  silences every notice for the rest of the session. A flag records whether anything was ever sent.
+- It is the one piece of stateful logic in the mod, so it is the one piece with tests. It touches
+  no Minecraft class, which is what lets it be unit tested.
+
+## Configuration
+
+`config/monosleep.json` is written from a template on first start and read once at server start.
+Changing it needs a restart; there is no reload watcher.
+
+- **Format** is JSON that also accepts `//` comments. The file is parsed with
+  `JsonParser.parseReader`, which reads in Gson's lenient mode, so an admin can annotate their own
+  setup without adding a JSON5 dependency. Gson ships with Minecraft, so no build change is needed.
+- **Values** are case-insensitive enum names for `notificationTarget`, whole seconds for the two
+  cooldowns and whole ticks for the three title timings. A wrong type, a fractional or out of range
+  number, a negative value, a file that is not a JSON object and a file that does not parse are
+  each logged and fall back to the default for that one key. A key the file does not carry keeps its
+  default, so a file written before a setting existed still loads.
+- **The defaults** are `CHAT`, `5`, `5`, `5`, `40`, `10`, written in exactly one place each, the
+  field initializers. `load()` reads the fields back when it writes the template, so the file a
+  server gets always shows the values the mod actually uses.
+- **The cooldowns** are counted per server rather than per level, since chat is shared between
+  levels. `MonosleepNoticeCooldown` holds that state and is cleared through
+  `ServerLifecycleEvents.SERVER_STARTED`, which matters on an integrated server: the game keeps
+  running after the world is closed, so without it the previous world would still hold the window.
 
 ## Project layout
 
 ```
 build.gradle.kts                    Loom, datagen run, dependencies, toolchain, jar, publishing
 settings.gradle.kts                  plugin and dependency repositories
-gradle/libs.versions.toml            version catalog: Minecraft, Loader, Fabric API, Loom
+gradle/libs.versions.toml            version catalog: Minecraft, Loader, Fabric API, Loom, JUnit
 gradle.properties                    project metadata and Gradle build flags
-src/main/java/monosleep/             mod entrypoint, advancement awarding
+src/main/java/monosleep/             mod entrypoint, advancement awarding, notifications, cooldown
 src/main/java/monosleep/mixin/      the two mixins
+src/main/java/monosleep/config/     config/monosleep.json: loading and the target enum
 src/main/java/monosleep/data/       datagen providers and translations
 src/main/generated/resources/        committed datagen output
 src/main/resources/                  fabric.mod.json, mixin config, icon
+src/test/java/monosleep/             unit tests for the logic that does not touch Minecraft
 .github/workflows/build.yml          CI: wrapper validation, Java 25, build
 ```
+
+## Tests
+
+```
+./gradlew test
+```
+
+Only the logic that does not touch Minecraft is unit tested, which is currently
+`MonosleepNoticeCooldown` alone. Everything that needs a live game — the mixins, the packets, the
+datagen providers — is verified by running `runClient` / `runServer`.
+
+A test here earns its place by pinning a boundary rather than a line of code: the first-notice case
+in `MonosleepNoticeCooldownTest` exists because the original "nothing sent yet" timestamp overflowed
+and silenced every notice for the rest of the session. Inverting that condition makes the suite go
+red, which is the check worth running after touching the cooldown.
+
+`build` runs `test` through `check`, so CI picks the tests up with no extra step.
 
 ## Build configuration
 
